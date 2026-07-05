@@ -1,0 +1,18 @@
+[project]
+name = "contract-intel-web"
+version = "0.1.0"
+description = "Django product layer: auth, documents, jobs, ops admin"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.1",
+    "dj-database-url>=2.2",
+    "psycopg[binary]>=3.2",
+    "gunicorn>=23.0",
+    "python-dotenv>=1.0",
+    "google-cloud-storage>=2.18",
+    "google-cloud-pubsub>=2.25",
+    "google-cloud-bigquery>=3.25",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.6", "pytest>=8.3", "pytest-django>=4.9"]

@@ -1,0 +1,30 @@
+# Secrets & local config
+.env
+*.env.local
+# Service-account key files — NEVER commit these
+*-key.json
+*service-account*.json
+gcp-*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Django
+staticfiles/
+media/
+db.sqlite3
+
+# Vector store persistence
+.chroma/
+chroma/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

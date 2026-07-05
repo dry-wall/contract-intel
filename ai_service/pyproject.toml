@@ -1,0 +1,23 @@
+[project]
+name = "contract-intel-ai"
+version = "0.1.0"
+description = "FastAPI AI microservice: LangGraph agent + ChromaDB RAG"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "python-dotenv>=1.0",
+    "langgraph>=0.2",
+    "langchain-google-vertexai>=2.0",
+    "chromadb>=0.5",
+    "sentence-transformers>=3.2",
+    "pypdf>=5.0",
+    "pdfplumber>=0.11",
+    "google-cloud-storage>=2.18",
+    "google-cloud-pubsub>=2.25",
+    "google-cloud-bigquery>=3.25",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.6", "pytest>=8.3", "httpx>=0.27"]
