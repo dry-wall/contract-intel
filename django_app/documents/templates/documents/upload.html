@@ -1,0 +1,100 @@
+{% extends "documents/base.html" %}
+{% block title %}Upload — ContractIntel{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>Upload a contract</h1>
+  <p class="subtitle">We'll extract every clause, score its risk against real market-standard templates, and benchmark it against every other contract we've analyzed.</p>
+
+  {% if not user.organization %}
+    <div class="error-box">Your account has no organization assigned. Ask an admin to set one in <a href="/admin/accounts/user/{{ user.id }}/change/">the admin panel</a> before uploading.</div>
+  {% endif %}
+
+  <div class="card">
+    <form id="upload-form">
+      {% csrf_token %}
+      <div class="form-row">
+        <label for="doc_type">Document type</label>
+        <select name="doc_type" id="doc_type">
+          {% for value, label in doc_types %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>Contract file (PDF)</label>
+        <div class="dropzone" id="dropzone">
+          <div class="icon">📄</div>
+          <div>Drag and drop a PDF here, or click to browse</div>
+          <div class="filename" id="filename"></div>
+          <input type="file" id="file-input" name="file" accept="application/pdf">
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="submit-btn" {% if not user.organization %}disabled{% endif %}>
+        Analyze contract
+      </button>
+      <div class="error-box" id="error-box" style="display:none;"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const filenameEl = document.getElementById('filename');
+  const form = document.getElementById('upload-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const errorBox = document.getElementById('error-box');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      filenameEl.textContent = fileInput.files[0].name;
+    }
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) filenameEl.textContent = fileInput.files[0].name;
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    if (!fileInput.files.length) {
+      errorBox.textContent = 'Please choose a PDF file first.';
+      errorBox.style.display = 'block';
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Uploading...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('doc_type', document.getElementById('doc_type').value);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    try {
+      const resp = await fetch("{% url 'documents:upload' %}", { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (!resp.ok) {
+        errorBox.textContent = data.error || JSON.stringify(data.errors) || 'Upload failed.';
+        errorBox.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Analyze contract';
+        return;
+      }
+      window.location.href = `/documents/${data.job_id}/status/`;
+    } catch (err) {
+      errorBox.textContent = 'Network error — is the server running?';
+      errorBox.style.display = 'block';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Analyze contract';
+    }
+  });
+</script>
+{% endblock %}

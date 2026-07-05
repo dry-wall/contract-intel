@@ -1,0 +1,39 @@
+{% extends "documents/base.html" %}
+{% block title %}My Documents — ContractIntel{% endblock %}
+{% block content %}
+<div class="container-wide">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+    <div>
+      <h1>Documents</h1>
+      <p class="subtitle">Every contract your organization has analyzed.</p>
+    </div>
+    <a href="{% url 'documents:upload' %}" class="btn">+ Upload a document</a>
+  </div>
+
+  <div class="card">
+    {% if jobs %}
+      {% for job in jobs %}
+        <div class="doc-row">
+          <div>
+            <div><strong>{{ job.document.original_filename }}</strong></div>
+            <div class="doc-meta">{{ job.document.get_doc_type_display }} &middot; uploaded {{ job.created_at|date:"M j, Y g:i A" }}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <span class="status-pill status-{{ job.status }}">{{ job.get_status_display }}</span>
+            {% if job.status == "COMPLETE" %}
+              <a href="{% url 'documents:results' job.id %}" class="btn-secondary" style="padding:8px 16px; border-radius:8px; text-decoration:none;">View results</a>
+            {% else %}
+              <a href="{% url 'documents:status' job.id %}" class="btn-secondary" style="padding:8px 16px; border-radius:8px; text-decoration:none;">View status</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">
+        <p>No documents yet.</p>
+        <a href="{% url 'documents:upload' %}" class="btn">Upload your first contract</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "documents/base.html" %}
+{% block title %}Log in — ContractIntel{% endblock %}
+{% block content %}
+<div class="container" style="max-width: 380px;">
+  <h1>Log in</h1>
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.errors %}
+        <div class="error-box">Incorrect username or password.</div>
+      {% endif %}
+      <div class="form-row">
+        <label for="id_username_real">Username</label>
+        <input type="text" name="username" id="id_username_real" required
+               style="width:100%; background:var(--surface-raised); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px 14px;">
+      </div>
+      <div class="form-row">
+        <label for="id_password">Password</label>
+        <input type="password" name="password" id="id_password" required
+               style="width:100%; background:var(--surface-raised); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px 14px;">
+      </div>
+      <button type="submit" class="btn" style="width:100%;">Log in</button>
+      <input type="hidden" name="next" value="{{ next }}">
+    </form>
+  </div>
+</div>
+{% endblock %}

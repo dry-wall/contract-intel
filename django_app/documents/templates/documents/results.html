@@ -1,0 +1,78 @@
+{% extends "documents/base.html" %}
+{% block title %}Results — {{ job.document.original_filename }}{% endblock %}
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="container-wide">
+  <h1>{{ job.document.original_filename }}</h1>
+  <p class="subtitle">{{ job.document.get_doc_type_display }} &middot; analyzed {{ job.finished_at|date:"M j, Y g:i A" }}</p>
+
+  {% if has_scored_clauses %}
+  <h2>Risk distribution: your organization vs. the platform</h2>
+  <div class="chart-wrap">
+    <canvas id="riskChart" height="90"></canvas>
+  </div>
+  {% endif %}
+
+  <h2>Clauses</h2>
+  {% for clause in clauses %}
+    <div class="card clause-card {% if clause.risk_category %}risk-{{ clause.risk_category|lower }}{% endif %}">
+      <div class="clause-header">
+        <span class="clause-type">{{ clause.clause_type }}</span>
+        {% if clause.risk_category %}
+          <span class="badge badge-{{ clause.risk_category|lower }}">{{ clause.risk_category }} · {{ clause.risk_score }}/100</span>
+        {% endif %}
+      </div>
+      <div class="clause-text">{{ clause.text|truncatechars:280 }}</div>
+      {% if clause.rationale %}
+        <div class="clause-rationale">{{ clause.rationale }}</div>
+      {% endif %}
+      {% if clause.percentile is not None %}
+        <div class="percentile-note">
+          Riskier than {{ clause.percentile|floatformat:0 }}% of {{ clause.clause_type|lower }} clauses we've analyzed
+          ({{ clause.population_size }} compared{% if clause.population_size == 1 %}, first of its kind so far{% endif %}).
+        </div>
+      {% endif %}
+      {% if clause.explanation %}
+        <div class="clause-explanation">{{ clause.explanation }}</div>
+      {% endif %}
+    </div>
+  {% empty %}
+    <div class="card"><div class="empty-state">No clauses were extracted from this document.</div></div>
+  {% endfor %}
+</div>
+
+{% if org_distribution or platform_distribution %}
+<script>
+  const orgData = {{ org_distribution_json|safe }};
+  const platformData = {{ platform_distribution_json|safe }};
+  const categories = ['LOW', 'MEDIUM', 'HIGH'];
+  const colors = { LOW: '#34c77b', MEDIUM: '#e8b339', HIGH: '#f0554a' };
+
+  function countsFor(data) {
+    const map = Object.fromEntries(data.map(d => [d.risk_category, d.count]));
+    return categories.map(c => map[c] || 0);
+  }
+
+  new Chart(document.getElementById('riskChart'), {
+    type: 'bar',
+    data: {
+      labels: categories,
+      datasets: [
+        { label: 'Your organization', data: countsFor(orgData), backgroundColor: '#5b8cff' },
+        { label: 'Whole platform', data: countsFor(platformData), backgroundColor: '#2a2f3a' },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { color: '#9099a8' }, grid: { color: '#2a2f3a' } },
+        y: { ticks: { color: '#9099a8' }, grid: { color: '#2a2f3a' }, beginAtZero: true },
+      },
+      plugins: { legend: { labels: { color: '#e8eaed' } } },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}

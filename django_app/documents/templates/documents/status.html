@@ -1,0 +1,78 @@
+{% extends "documents/base.html" %}
+{% block title %}Analyzing — ContractIntel{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>{{ job.document.original_filename }}</h1>
+  <p class="subtitle">{{ job.document.get_doc_type_display }} &middot; uploaded {{ job.created_at|date:"M j, Y g:i A" }}</p>
+
+  <div class="card">
+    <div class="stepper" id="stepper">
+      <div class="step" data-step="PENDING"><div class="step-line"></div>Uploaded</div>
+      <div class="step" data-step="PUBLISHED"><div class="step-line"></div>Queued</div>
+      <div class="step" data-step="PROCESSING"><div class="step-line"></div>Analyzing</div>
+      <div class="step" data-step="COMPLETE"><div class="step-line"></div>Done</div>
+    </div>
+
+    <div id="status-text" style="text-align:center;">
+      <span class="spinner"></span> <span id="status-label">Checking status...</span>
+    </div>
+
+    <div class="error-box" id="error-box" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+  const jobId = {{ job.id }};
+  const statusUrl = `/documents/${jobId}/status.json`;
+  const stepOrder = ["PENDING", "PUBLISHED", "PROCESSING", "COMPLETE"];
+
+  function renderStepper(status) {
+    const currentIndex = stepOrder.indexOf(status);
+    document.querySelectorAll('.step').forEach((el, i) => {
+      el.classList.remove('active', 'done', 'failed');
+      if (status === 'FAILED') {
+        if (i === 0) el.classList.add('failed');
+      } else if (i < currentIndex) {
+        el.classList.add('done');
+      } else if (i === currentIndex) {
+        el.classList.add('active');
+      }
+    });
+  }
+
+  async function poll() {
+    try {
+      const resp = await fetch(statusUrl);
+      const data = await resp.json();
+      renderStepper(data.status);
+
+      const label = document.getElementById('status-label');
+      const spinner = document.querySelector('.spinner');
+
+      if (data.status === 'COMPLETE') {
+        label.textContent = 'Analysis complete — redirecting...';
+        spinner.style.display = 'none';
+        setTimeout(() => { window.location.href = `/documents/${jobId}/results/`; }, 700);
+        return;
+      }
+      if (data.status === 'FAILED') {
+        spinner.style.display = 'none';
+        label.textContent = 'Analysis failed.';
+        const errorBox = document.getElementById('error-box');
+        errorBox.textContent = data.error_detail || 'An unknown error occurred.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      const labels = { PENDING: 'Uploading...', PUBLISHED: 'Queued for analysis...', PROCESSING: 'Analyzing clauses with AI...' };
+      label.textContent = labels[data.status] || data.status;
+      setTimeout(poll, 2000);
+    } catch (err) {
+      setTimeout(poll, 3000);
+    }
+  }
+
+  renderStepper("{{ job.status }}");
+  poll();
+</script>
+{% endblock %}

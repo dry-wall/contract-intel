@@ -1,0 +1,218 @@
+/* Contract Intelligence — design system. Single stylesheet, no framework.
+   Dark, focused palette that reads as "serious analysis tool" rather than
+   generic SaaS-blue, since the product's whole pitch is trustworthy legal
+   risk analysis. */
+
+:root {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --surface-raised: #1e222b;
+  --border: #2a2f3a;
+  --text: #e8eaed;
+  --text-muted: #9099a8;
+  --accent: #5b8cff;
+  --accent-dim: #2a3a5c;
+  --risk-low: #34c77b;
+  --risk-medium: #e8b339;
+  --risk-high: #f0554a;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.nav .brand { font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; }
+.nav .brand span { color: var(--accent); }
+.nav-links { display: flex; gap: 20px; align-items: center; font-size: 0.9rem; }
+.nav-links a { color: var(--text-muted); }
+.nav-links a:hover { color: var(--text); text-decoration: none; }
+
+.container { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+.container-wide { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+h1 { font-size: 1.7rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+h2 { font-size: 1.2rem; margin: 32px 0 12px; }
+.subtitle { color: var(--text-muted); margin: 0 0 32px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.card-hover:hover { border-color: var(--accent); cursor: pointer; }
+
+/* --- Upload dropzone ------------------------------------------------- */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.dropzone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+.dropzone .icon { font-size: 2.5rem; margin-bottom: 12px; }
+.dropzone input[type="file"] { display: none; }
+.dropzone .filename { color: var(--accent); font-weight: 600; margin-top: 8px; }
+
+select, button {
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+select {
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  width: 100%;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.9; text-decoration: none; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { background: var(--surface-raised); border: 1px solid var(--border); color: var(--text); }
+
+.form-row { margin-bottom: 20px; }
+.form-row label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); }
+
+/* --- Status stepper ---------------------------------------------------- */
+.stepper { display: flex; align-items: center; margin: 32px 0; }
+.step {
+  flex: 1;
+  text-align: center;
+  position: relative;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.step::before {
+  content: "";
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--border);
+  margin: 0 auto 8px;
+  border: 3px solid var(--bg);
+  outline: 3px solid var(--border);
+}
+.step.active::before { outline-color: var(--accent); background: var(--accent); }
+.step.done::before { outline-color: var(--risk-low); background: var(--risk-low); }
+.step.failed::before { outline-color: var(--risk-high); background: var(--risk-high); }
+.step-line { position: absolute; top: 6px; left: -50%; width: 100%; height: 2px; background: var(--border); z-index: -1; }
+.step:first-child .step-line { display: none; }
+
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--accent-dim);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Risk badges --------------------------------------------------- */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-low { background: rgba(52, 199, 123, 0.15); color: var(--risk-low); }
+.badge-medium { background: rgba(232, 179, 57, 0.15); color: var(--risk-medium); }
+.badge-high { background: rgba(240, 85, 74, 0.15); color: var(--risk-high); }
+
+/* --- Clause cards -------------------------------------------------- */
+.clause-card { border-left: 3px solid var(--border); padding-left: 16px; }
+.clause-card.risk-high { border-left-color: var(--risk-high); }
+.clause-card.risk-medium { border-left-color: var(--risk-medium); }
+.clause-card.risk-low { border-left-color: var(--risk-low); }
+.clause-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.clause-type { font-weight: 600; }
+.clause-text { color: var(--text-muted); font-size: 0.9rem; margin: 8px 0; white-space: pre-wrap; }
+.clause-rationale { font-size: 0.88rem; margin-top: 8px; }
+.clause-explanation {
+  background: var(--surface-raised);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+.percentile-note { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
+
+/* --- Status/list table ---------------------------------------------- */
+.doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.doc-row:last-child { border-bottom: none; }
+.doc-meta { color: var(--text-muted); font-size: 0.85rem; }
+
+.status-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.status-PENDING, .status-PUBLISHED { background: var(--accent-dim); color: var(--accent); }
+.status-PROCESSING { background: rgba(232, 179, 57, 0.15); color: var(--risk-medium); }
+.status-COMPLETE { background: rgba(52, 199, 123, 0.15); color: var(--risk-low); }
+.status-FAILED { background: rgba(240, 85, 74, 0.15); color: var(--risk-high); }
+
+.empty-state { text-align: center; color: var(--text-muted); padding: 60px 20px; }
+
+.chart-wrap { background: var(--surface-raised); border-radius: var(--radius); padding: 20px; margin: 16px 0; }
+
+.error-box {
+  background: rgba(240, 85, 74, 0.1);
+  border: 1px solid var(--risk-high);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--risk-high);
+  margin: 16px 0;
+}

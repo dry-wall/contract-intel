@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Contract Intelligence{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'documents/css/main.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav class="nav">
+    <a href="{% url 'documents:list' %}" class="brand">Contract<span>Intel</span></a>
+    <div class="nav-links">
+      {% if user.is_authenticated %}
+        <span>{{ user.organization.name|default:"No organization" }}</span>
+        <a href="{% url 'documents:upload' %}">Upload</a>
+        <a href="/admin/">Admin</a>
+        <form method="post" action="{% url 'logout' %}" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="btn-secondary" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0;font:inherit;">Log out</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}">Log in</a>
+      {% endif %}
+    </div>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>
