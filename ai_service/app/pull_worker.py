@@ -52,7 +52,8 @@ def main() -> None:
     )
     logger.info("Listening on %s (Ctrl+C to stop)...", subscription_path)
 
-    future = subscriber.subscribe(subscription_path, callback=_callback)
+    flow_control = pubsub_v1.types.FlowControl(max_messages=1)
+    future = subscriber.subscribe(subscription_path, callback=_callback, flow_control=flow_control)
     try:
         future.result()
     except KeyboardInterrupt:

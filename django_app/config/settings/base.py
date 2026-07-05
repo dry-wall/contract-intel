@@ -103,4 +103,8 @@ GCP_REGION = os.environ.get("GCP_REGION", "asia-south1")
 GCS_BUCKET = os.environ.get("GCS_BUCKET", "")
 PUBSUB_UPLOAD_TOPIC = os.environ.get("PUBSUB_UPLOAD_TOPIC", "document-uploaded")
 PUBSUB_PROCESSED_TOPIC = os.environ.get("PUBSUB_PROCESSED_TOPIC", "document-processed")
+# Pull subscription for local dev only -- Phase 10 uses a push subscription instead.
+PUBSUB_PROCESSED_PULL_SUBSCRIPTION = os.environ.get(
+    "PUBSUB_PROCESSED_PULL_SUBSCRIPTION", "django-processed-pull-sub"
+)
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25MB default

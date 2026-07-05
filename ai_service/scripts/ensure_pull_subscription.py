@@ -37,7 +37,9 @@ def main() -> None:
         )
 
     try:
-        subscriber.create_subscription(name=subscription_path, topic=topic_path)
+        subscriber.create_subscription(
+    name=subscription_path, topic=topic_path, ack_deadline_seconds=600
+)
         logger.info("Created pull subscription '%s'.", config.PUBSUB_UPLOAD_PULL_SUBSCRIPTION)
     except AlreadyExists:
         logger.info("Pull subscription '%s' already exists.", config.PUBSUB_UPLOAD_PULL_SUBSCRIPTION)

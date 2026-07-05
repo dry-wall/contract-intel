@@ -36,9 +36,8 @@
   skip the population comparison for those types, or fall back to an
   unfiltered/broader population query rather than trusting a same-category
   match that doesn't actually exist in the data.
-- **Status:** tracked here, to be handled explicitly when building Phase 7's
-  BigQuery benchmarking (population-side queries only — risk scoring itself,
-  which uses the BASELINE side, is unaffected).
+- **Status:** tracked here, to be handled explicitly when building Phase 5's
+  risk-scoring tool.
 
 ## Model availability surprise (found during Phase 5 manual testing)
 - **Finding:** `gemini-3.1-flash-lite`, despite being documented as GA,
@@ -52,3 +51,38 @@
 - **Status:** resolved for now. Revisit `gemini-3.1-flash-lite` later,
   possibly with `VERTEX_LOCATION=global` instead of a regional endpoint,
   once broader availability is confirmed.
+
+## Sequential risk-scoring doesn't scale to large documents (found during Phase 6 manual testing)
+- **Symptom:** a 71-page document with many clauses took long enough that the
+  ai_service pull subscription's ack deadline (even after raising it to 600s)
+  was exceeded, causing Pub/Sub to redeliver the original document-uploaded
+  message WHILE the first attempt was still running. Because
+  _processed_job_ids only marks a job done on success (correct behavior, see
+  the idempotency-on-failure fix in Phase 6), the redelivered attempt was not
+  caught by the duplicate guard — both attempts ran concurrently, each
+  independently calling Gemini for the same job_id. Not data-corrupting
+  (Django's mark_complete is safe to call twice) but wasted real LLM spend.
+- **Likely root cause:** the Pub/Sub client library normally auto-extends a
+  message's ack deadline in a background thread while the callback is still
+  running. sentence-transformers/PyTorch's local embedding computation is
+  CPU-bound and can hold the GIL for extended periods, likely starving that
+  background thread and preventing the auto-extension from firing — the
+  redelivery landed almost exactly at the configured deadline, not at some
+  arbitrary time, which supports this theory over "just needs a longer
+  deadline."
+- **Mitigation applied:** set `flow_control=pubsub_v1.types.FlowControl(max_messages=1)`
+  on the ai_service pull subscriber (app/pull_worker.py), forcing strictly
+  sequential message processing. This eliminates the concurrent-duplicate-
+  processing symptom (verified: a short document now goes PROCESSING ->
+  COMPLETE exactly once, no duplicates). It does NOT fix the underlying
+  slowness for large documents — a large enough document could still exceed
+  the ack deadline and trigger a redelivery, it just can no longer overlap
+  with a still-running attempt on itself.
+- **Root fix (tracked, not yet built):** parallelize the risk-scoring loop in
+  app/tools/risk_scoring.py (e.g. asyncio or a thread/process pool) so a
+  document with many clauses finishes in seconds rather than minutes, well
+  under any reasonable ack deadline. Also worth investigating running
+  embeddings in a separate process (not sharing the GIL with the Pub/Sub
+  client's lease-management thread) if the GIL-contention theory holds up.
+- **Status:** mitigated (no more duplicate concurrent processing). Root
+  fix (parallelization) still open, tracked for Phase 11 hardening.
