@@ -138,7 +138,6 @@ def job_results_page(request, job_id):
     explanation_by_index = {e["clause_index"]: e["explanation"] for e in explanations}
 
     clauses = []
-    has_scored_clauses = any(c["risk_category"] for c in clauses)
     for i, clause in enumerate(raw_clauses):
         risk = risk_by_index.get(i)
         entry = {
@@ -158,7 +157,7 @@ def job_results_page(request, job_id):
             entry["percentile"] = benchmark["percentile"]
             entry["population_size"] = benchmark["population_size"]
         clauses.append(entry)
-
+    has_scored_clauses = any(c["risk_category"] for c in clauses)
     org_distribution = get_risk_category_distribution(organization_id=request.user.organization_id)
     platform_distribution = get_risk_category_distribution(organization_id=None)
 

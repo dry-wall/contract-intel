@@ -17,10 +17,8 @@ services:
       timeout: 5s
       retries: 10
 
-  # Local Pub/Sub emulator. Django and (from Phase 3) FastAPI both publish/
-  # subscribe against this instead of real GCP Pub/Sub while developing.
-  # NOTE: this image is the full Cloud SDK and is large (1-2GB) — the first
-  # `docker compose up` will take a while to pull it. That's expected.
+  # Local Pub/Sub emulator. Both django and ai-worker publish/subscribe
+  # against this instead of real GCP Pub/Sub while developing.
   pubsub-emulator:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
     container_name: contract-intel-pubsub-emulator
@@ -32,8 +30,7 @@ services:
     ports:
       - "8085:8085"
 
-  # Local GCS emulator (fake-gcs-server). Django's storage.py transparently
-  # points here instead of real GCS whenever GCS_EMULATOR_HOST is set in .env.
+  # Local GCS emulator (fake-gcs-server).
   gcs-emulator:
     image: fsouza/fake-gcs-server:latest
     container_name: contract-intel-gcs-emulator
@@ -41,6 +38,102 @@ services:
     command: -scheme http -port 4443 -public-host localhost:4443
     ports:
       - "4443:4443"
+
+  # --- Django product layer ------------------------------------------------
+  # Web process: migrates then runs the dev server. The image's own Dockerfile
+  # CMD (gunicorn) is the PRODUCTION command — overridden here for local dev
+  # so you get auto-reload and DEBUG=True without a second Dockerfile.
+  django:
+    build: ./django_app
+    container_name: contract-intel-django
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    env_file: .env
+    environment:
+      # These three MUST use docker-compose SERVICE NAMES, not "localhost" —
+      # inside a container, "localhost" refers to the container itself, not
+      # sibling containers or the host machine. This is the #1 thing that
+      # breaks when Dockerizing a project that was developed with `uv run`
+      # against services on localhost.
+      DATABASE_URL: postgres://ci:ci@postgres:5432/contract_intel
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCS_EMULATOR_HOST: http://gcs-emulator:4443
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      # Real BigQuery (Phase 7 analytics) needs real ADC even in local Docker
+      # — Dockerizing doesn't remove the "no BigQuery emulator" reality from
+      # Phase 7. Mounted below from your host's gcloud config.
+      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+    volumes:
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+      - ./django_app/documents:/app/documents
+      - ./django_app/accounts:/app/accounts
+      - ./django_app/analytics:/app/analytics
+      - ./django_app/config:/app/config
+      - ./django_app/templates:/app/templates
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+      gcs-emulator:
+        condition: service_started
+
+  # Second Django process: the Phase 6 pull-based consumer for
+  # document-processed events. Same image as `django`, different command —
+  # this is why both services share `build: ./django_app` rather than
+  # needing a separate Dockerfile.
+  django-consumer:
+    build: ./django_app
+    container_name: contract-intel-django-consumer
+    command: python manage.py consume_processed_events
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://ci:ci@postgres:5432/contract_intel
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCS_EMULATOR_HOST: http://gcs-emulator:4443
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+    volumes:
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+      - ./django_app/documents:/app/documents
+      - ./django_app/accounts:/app/accounts
+      - ./django_app/analytics:/app/analytics
+      - ./django_app/config:/app/config
+      - ./django_app/templates:/app/templates
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+
+  # --- AI microservice -------------------------------------------------
+  # Runs the Phase 3 pull worker for local dev (not the production push
+  # endpoint — see the Dockerfile's own CMD for that). This is the one
+  # service that ALWAYS needs real Google credentials, regardless of
+  # emulator usage, because Vertex AI (Gemini) and BigQuery streaming are
+  # never emulated — only Pub/Sub and GCS are.
+  ai-worker:
+    build: ./ai_service
+    container_name: contract-intel-ai-worker
+    command: python -m app.pull_worker
+    env_file: .env
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCS_EMULATOR_HOST: http://gcs-emulator:4443
+      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+    volumes:
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+      # Bind-mount the ALREADY-SEEDED ChromaDB directory from the host
+      # rather than re-running Phase 4's 20-25 minute embedding step inside
+      # the container. Run infra/seed_corpus.py + embed_and_load.py on the
+      # host (as in Phase 4) before starting this service for the first time.
+      - ./.chroma:/app/.chroma
+    depends_on:
+      pubsub-emulator:
+        condition: service_started
+      gcs-emulator:
+        condition: service_started
 
 volumes:
   pgdata:

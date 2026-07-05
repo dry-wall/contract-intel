@@ -43,7 +43,7 @@
   {% endfor %}
 </div>
 
-{% if org_distribution or platform_distribution %}
+{% if has_scored_clauses %}
 <script>
   const orgData = {{ org_distribution_json|safe }};
   const platformData = {{ platform_distribution_json|safe }};
