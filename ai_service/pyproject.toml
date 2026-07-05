@@ -17,6 +17,7 @@ dependencies = [
     "google-cloud-storage>=2.18",
     "google-cloud-pubsub>=2.25",
     "google-cloud-bigquery>=3.25",
+    "requests>=2.32",
 ]
 
 [dependency-groups]
