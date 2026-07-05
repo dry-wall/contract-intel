@@ -5,5 +5,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("django.contrib.auth.urls")),
     path("documents/", include("documents.urls")),
+    path("analytics/", include("analytics.urls")),
     # Status/results views arrive in Phase 6 & 8.
 ]

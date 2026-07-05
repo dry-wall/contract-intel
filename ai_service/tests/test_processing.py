@@ -15,13 +15,14 @@ def setup_function():
     _processed_job_ids.clear()
 
 
+@patch("app.processing.stream_clauses")
 @patch("app.processing.publish_processed_result")
 @patch("app.processing.publish_processing_started")
 @patch("app.processing.run_agent")
 @patch("app.processing.download_pdf")
 @patch("app.processing.extract_pages")
 def test_success_path_publishes_started_then_complete(
-    mock_extract, mock_download, mock_run_agent, mock_started, mock_complete
+    mock_extract, mock_download, mock_run_agent, mock_started, mock_complete, mock_stream
 ):
     good_text = "x" * (MIN_CHARS_PER_PAGE * 10)
     mock_extract.return_value = [{"page_number": 1, "text": good_text}]
@@ -36,6 +37,11 @@ def test_success_path_publishes_started_then_complete(
     assert mock_complete.call_args[0][0] == 1  # job_id
     assert mock_complete.call_args[0][1]["clauses"] == [{"clause_type": "X"}]
     assert 1 in _processed_job_ids
+
+    # Phase 7: BigQuery streaming must also fire on success, with the same clauses/risk_scores.
+    mock_stream.assert_called_once()
+    assert mock_stream.call_args[1]["job_id"] == 1
+    assert mock_stream.call_args[1]["clauses"] == [{"clause_type": "X"}]
 
 
 @patch("app.processing.publish_processing_failed")
@@ -57,6 +63,7 @@ def test_scanned_pdf_publishes_failed_and_is_not_marked_processed(
     assert 2 not in _processed_job_ids
 
 
+@patch("app.processing.stream_clauses")
 @patch("app.processing.publish_processed_result")
 @patch("app.processing.publish_processing_failed")
 @patch("app.processing.publish_processing_started")
@@ -64,7 +71,7 @@ def test_scanned_pdf_publishes_failed_and_is_not_marked_processed(
 @patch("app.processing.download_pdf")
 @patch("app.processing.extract_pages")
 def test_agent_exception_publishes_failed_and_allows_retry(
-    mock_extract, mock_download, mock_run_agent, mock_started, mock_failed, mock_complete
+    mock_extract, mock_download, mock_run_agent, mock_started, mock_failed, mock_complete, mock_stream
 ):
     good_text = "x" * (MIN_CHARS_PER_PAGE * 10)
     mock_extract.return_value = [{"page_number": 1, "text": good_text}]
@@ -87,13 +94,14 @@ def test_agent_exception_publishes_failed_and_allows_retry(
     assert mock_run_agent.call_count == 2  # genuinely retried, not skipped
 
 
+@patch("app.processing.stream_clauses")
 @patch("app.processing.publish_processed_result")
 @patch("app.processing.publish_processing_started")
 @patch("app.processing.run_agent")
 @patch("app.processing.download_pdf")
 @patch("app.processing.extract_pages")
 def test_duplicate_delivery_after_success_is_skipped(
-    mock_extract, mock_download, mock_run_agent, mock_started, mock_complete
+    mock_extract, mock_download, mock_run_agent, mock_started, mock_complete, mock_stream
 ):
     good_text = "x" * (MIN_CHARS_PER_PAGE * 10)
     mock_extract.return_value = [{"page_number": 1, "text": good_text}]

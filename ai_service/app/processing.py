@@ -34,6 +34,7 @@ from app.sinks.pubsub_publish import (
     publish_processing_failed,
     publish_processing_started,
 )
+from app.sinks.bigquery_sink import stream_clauses
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,15 @@ def handle_upload_event(payload: ProcessRequest) -> dict:
             "explanations": agent_result["explanations"],
         }
         publish_processed_result(payload.job_id, result)
+
+        stream_clauses(
+            job_id=payload.job_id,
+            document_id=payload.document_id,
+            organization_id=payload.organization_id,
+            doc_type=payload.doc_type,
+            clauses=agent_result["clauses"],
+            risk_scores=agent_result["risk_scores"],
+        )
 
         _processed_job_ids.add(payload.job_id)  # only mark done on genuine success
         return {"job_id": payload.job_id, "status": "processed", **result}

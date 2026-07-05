@@ -108,3 +108,5 @@ PUBSUB_PROCESSED_PULL_SUBSCRIPTION = os.environ.get(
     "PUBSUB_PROCESSED_PULL_SUBSCRIPTION", "django-processed-pull-sub"
 )
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25MB default
+# --- BigQuery (Phase 7) ------------------------------------------------------
+BQ_DATASET = os.environ.get("BQ_DATASET", "contract_intel")

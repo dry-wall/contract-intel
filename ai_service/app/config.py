@@ -38,3 +38,4 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 # PUBSUB_EMULATOR_HOST is read directly by google-cloud-pubsub itself; we
 # don't need to reference it here, just make sure load_dotenv() above has
 # already populated it into os.environ before any pubsub client is built.
+BQ_DATASET = os.environ.get("BQ_DATASET", "contract_intel")
