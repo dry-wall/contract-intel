@@ -96,3 +96,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
+# --- GCP resource config (Phase 2 onward) ---------------------------------
+# GCP_PROJECT_ID is required everywhere (storage, pubsub, bigquery, vertex).
+GCP_PROJECT_ID = os.environ["GCP_PROJECT_ID"]
+GCP_REGION = os.environ.get("GCP_REGION", "asia-south1")
+GCS_BUCKET = os.environ.get("GCS_BUCKET", "")
+PUBSUB_UPLOAD_TOPIC = os.environ.get("PUBSUB_UPLOAD_TOPIC", "document-uploaded")
+PUBSUB_PROCESSED_TOPIC = os.environ.get("PUBSUB_PROCESSED_TOPIC", "document-processed")
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25MB default

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><title>Upload (temporary test form)</title></head>
+<body>
+  <p><strong>This is a temporary, unstyled test form.</strong>
+     It exists only to exercise the Phase 2 ingestion pipeline by hand.
+     The real upload page is built in Phase 8.</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Upload</button>
+  </form>
+</body>
+</html>

@@ -17,5 +17,30 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local Pub/Sub emulator. Django and (from Phase 3) FastAPI both publish/
+  # subscribe against this instead of real GCP Pub/Sub while developing.
+  # NOTE: this image is the full Cloud SDK and is large (1-2GB) — the first
+  # `docker compose up` will take a while to pull it. That's expected.
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
+    container_name: contract-intel-pubsub-emulator
+    restart: unless-stopped
+    command: >
+      gcloud beta emulators pubsub start
+      --host-port=0.0.0.0:8085
+      --project=${GCP_PROJECT_ID}
+    ports:
+      - "8085:8085"
+
+  # Local GCS emulator (fake-gcs-server). Django's storage.py transparently
+  # points here instead of real GCS whenever GCS_EMULATOR_HOST is set in .env.
+  gcs-emulator:
+    image: fsouza/fake-gcs-server:latest
+    container_name: contract-intel-gcs-emulator
+    restart: unless-stopped
+    command: -scheme http -port 4443 -public-host localhost:4443
+    ports:
+      - "4443:4443"
+
 volumes:
   pgdata:

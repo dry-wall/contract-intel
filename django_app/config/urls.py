@@ -4,5 +4,6 @@ from django.urls import include, path
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("django.contrib.auth.urls")),
-    # Upload/status/results views arrive in Phase 2 & 8.
+    path("documents/", include("documents.urls")),
+    # Status/results views arrive in Phase 6 & 8.
 ]
