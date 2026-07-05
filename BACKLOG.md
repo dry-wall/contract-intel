@@ -86,3 +86,45 @@
   client's lease-management thread) if the GIL-contention theory holds up.
 - **Status:** mitigated (no more duplicate concurrent processing). Root
   fix (parallelization) still open, tracked for Phase 11 hardening.
+
+## Push webhook OIDC audience validation skipped (Phase 10)
+- **Finding:** `processed_event_webhook`'s OIDC verification calls
+  `id_token.verify_oauth2_token(token, google_requests.Request())` without
+  passing an `audience` argument, meaning it confirms the token was issued
+  by Google and identifies the expected service account, but does NOT
+  confirm the token was minted specifically for THIS webhook's URL. A valid
+  OIDC token for `ai-worker-sa` minted for a different audience would
+  currently still pass.
+- **Why deferred:** the webhook's own URL isn't known until after the
+  first `gcloud run deploy` completes — a genuine chicken-and-egg problem
+  for a value that would otherwise be hardcoded into the code that gets
+  deployed to produce that same URL.
+- **Fix (tracked, not yet built):** after first deploy, capture `$DJANGO_URL`
+  and either (a) pass it explicitly as the `audience` parameter via an env
+  var (`DJANGO_PUSH_AUDIENCE`) read by the view, or (b) use a custom domain
+  mapped to the Cloud Run service so the audience value is stable across
+  redeploys instead of changing with every new revision URL.
+- **Status:** open, tracked for Phase 11 hardening. Not a severe risk today
+  given the additional service-account-identity check already in place, but
+  worth closing before this handles anything beyond a demo/portfolio project.
+
+## ChromaDB persistent server has no real scaling/durability story (Phase 10)
+- **Finding:** `chroma-server` is deployed with `--min-instances=1
+  --max-instances=1` because Chroma's data lives in the container's own
+  local storage — no persistent volume, no replication. This satisfies the
+  Phase 4 decision ("persistent server, not on-disk client") only in the
+  narrow sense of "the process doesn't restart on every request"; it does
+  NOT protect against data loss if the container is ever rescheduled,
+  crashes, or the underlying VM is reclaimed by Cloud Run's infrastructure.
+- **Why deferred:** implementing a genuinely durable backing store (a
+  persistent disk mounted into Cloud Run, or migrating to a managed vector
+  DB / Chroma Cloud) is real scope beyond a demo/portfolio deployment, and
+  the corpus itself (Phase 4's seeded baseline + population clauses) is
+  fully reproducible by re-running `infra/seed_corpus.py` +
+  `infra/embed_and_load.py` if it were ever lost — an acceptable risk for
+  now, not for a real production tenant-facing system.
+- **Fix (tracked, not yet built):** mount a persistent volume (Cloud Run's
+  volume mount support) or migrate to a managed alternative before this
+  system holds any data that isn't trivially re-derivable from the seed
+  scripts.
+- **Status:** open, tracked for Phase 11 hardening.
