@@ -26,6 +26,15 @@ PUBSUB_PROCESSED_TOPIC = os.environ.get("PUBSUB_PROCESSED_TOPIC", "document-proc
 PUBSUB_UPLOAD_PULL_SUBSCRIPTION = os.environ.get(
     "PUBSUB_UPLOAD_PULL_SUBSCRIPTION", "ai-process-pull-sub"
 )
+# --- Vertex AI / Gemini (Phase 5) ------------------------------------------
+VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "us-central1")
+LLM_EXTRACT_MODEL = os.environ.get("LLM_EXTRACT_MODEL", "gemini-3.1-flash-lite")
+LLM_RISK_MODEL = os.environ.get("LLM_RISK_MODEL", "gemini-2.5-pro")
+
+# --- ChromaDB (Phase 4) -----------------------------------------------------
+CHROMA_PATH = os.environ.get("CHROMA_PATH", "./.chroma")
+CHROMA_HOST = os.environ.get("CHROMA_HOST", "")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 # PUBSUB_EMULATOR_HOST is read directly by google-cloud-pubsub itself; we
 # don't need to reference it here, just make sure load_dotenv() above has
 # already populated it into os.environ before any pubsub client is built.
