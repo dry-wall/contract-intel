@@ -1,6 +1,17 @@
 # Tracked Gaps / Backlog
 
 ## OCR fallback for scanned PDFs (raised after Phase 3 manual test)
+- **Status: RESOLVED (Phase 11).** Implemented via `ai_service/app/ocr.py`:
+  each page of a scanned/low-text PDF is rendered to an image locally
+  (PyMuPDF) and run through Google Cloud Vision's synchronous
+  `document_text_detection` per page — avoiding Vision's async-only native
+  PDF workflow (which requires a GCS round-trip for both input and output).
+  Wired into `processing.py`'s existing char-count guard: instead of
+  dead-ending with a FAILED event, a low-text document now falls through to
+  OCR and continues the normal pipeline on success. An OCR failure itself
+  still fails loudly and stays retryable (not marked processed), same
+  pattern as every other failure path in this function. 2 new tests for
+  `ocr.py`, 2 new tests for the `processing.py` integration, all passing.
 - **Symptom:** `pypdf.extract_text()` returns 0 characters for scanned/image-based
   PDFs (confirmed on real upload: 9 pages, 0 chars). This is expected — pypdf
   reads text layers, not pixels.
@@ -53,6 +64,17 @@
   once broader availability is confirmed.
 
 ## Sequential risk-scoring doesn't scale to large documents (found during Phase 6 manual testing)
+- **Status: RESOLVED (Phase 11).** `risk_scoring.py` now processes clauses
+  concurrently via a bounded `ThreadPoolExecutor` (`MAX_WORKERS = 5`) —
+  each clause's Chroma query + Gemini Pro call is I/O-bound, so threads
+  genuinely parallelize wall-clock time by releasing the GIL during network
+  waits. Results are reassembled by `clause_index` regardless of which
+  clause's work finishes first — verified with a test that deliberately
+  makes later clauses complete before earlier ones (artificial delays) to
+  prove the ordering guarantee holds under genuine out-of-order completion,
+  not just "happens to work in submission order." Bounded concurrency
+  (not unbounded) avoids firing e.g. 100 simultaneous Gemini requests for a
+  100-clause document and blowing through rate limits. 5 tests, all passing.
 - **Symptom:** a 71-page document with many clauses took long enough that the
   ai_service pull subscription's ack deadline (even after raising it to 600s)
   was exceeded, causing Pub/Sub to redeliver the original document-uploaded
@@ -88,6 +110,13 @@
   fix (parallelization) still open, tracked for Phase 11 hardening.
 
 ## Push webhook OIDC audience validation skipped (Phase 10)
+- **Status: RESOLVED (Phase 11).** Now that the Cloud Run service URL is
+  stable, `DJANGO_PUSH_AUDIENCE` is set to the real deployed URL and passed
+  as the `audience` parameter to `id_token.verify_oauth2_token()`. Falls
+  back to `None` (no strict audience check) only if the setting is left
+  unset, so local/dev environments without a real URL still work. 2 new
+  tests confirm the audience is actually passed when configured and
+  correctly `None` when not — 8 total tests on the webhook, all passing.
 - **Finding:** `processed_event_webhook`'s OIDC verification calls
   `id_token.verify_oauth2_token(token, google_requests.Request())` without
   passing an `audience` argument, meaning it confirms the token was issued
@@ -174,17 +203,34 @@
 - **Status:** root cause fixed and confirmed working end-to-end in
   production. Follow-ups below are not yet done.
 
-## Follow-ups from the CPU-throttling investigation (Phase 11)
-- **`--concurrency=1` is overly conservative.** Set during debugging to
-  rule out multi-request GIL contention on one instance; the real bug was
-  CPU throttling, not concurrency. Revisit and raise back toward a normal
-  value (Cloud Run's default is 80) now that `--no-cpu-throttling` is set,
-  to avoid needlessly limiting throughput.
-- **Chroma OIDC token refresh.** `retrieval.py`'s `_get_client()` fetches
-  one identity token at client construction and never refreshes it. A
-  warm `ai-service` instance surviving longer than the token's ~1 hour
-  lifetime will start getting 403s from `chroma-server` again. Needs a
-  refresh-on-401/403 retry, or re-fetching the token periodically.
-- **`processed_event_webhook`'s OIDC audience check is still unset**
-  (logged as its own item above) — same category of unfinished auth
-  hardening, worth doing together.
+## Follow-ups from the CPU-throttling investigation (Phase 11) — all resolved
+- **`--concurrency=1` was overly conservative.** RESOLVED: raised to 20
+  now that `--no-cpu-throttling` is the actual fix in place.
+- **Chroma OIDC token refresh.** RESOLVED: `retrieval.py`'s `_get_client()`
+  now rebuilds the client (fetching a fresh token) whenever the cached
+  token is older than 45 minutes, safely under the ~1hr token lifetime.
+  4 tests confirm: first call fetches a token, a second call with a fresh
+  token does NOT re-fetch (no wasted calls), a stale token DOES trigger a
+  genuine rebuild (not just a cache hit), and the no-CHROMA_HOST local-dev
+  path is unaffected. The Phase 10 diagnostic subprocess probe (added
+  during the CPU-throttling investigation, no longer needed) was removed
+  in the same pass — it added a full subprocess spawn to every cold start
+  for no benefit once the real bug was found.
+- **`processed_event_webhook`'s audience check** — see its own entry above,
+  now resolved in the same phase.
+
+## Phase 11 additions (not backlog items, but worth recording)
+- **Dead-letter queue alerting**: a Cloud Monitoring alert policy now fires
+  (via email notification channel) if either `document-uploaded-dlq` or
+  `document-processed-dlq` ever receives a message — previously a
+  permanently-stuck message would fail silently forever.
+- **CI**: GitHub Actions now runs both test suites (`ai_service` and
+  `django_app`) on every push and PR to `main`. Two real CI-specific gaps
+  were found and fixed getting this working: (1) `ai_service`'s tests need
+  `GCP_PROJECT_ID` and related env vars explicitly set in the workflow,
+  since `app/config.py` reads them as required (no default) and CI has no
+  `.env` file the way local dev does; (2) Django's tests need
+  `collectstatic` run first, since Phase 8's WhiteNoise
+  `CompressedManifestStaticFilesStorage` requires a manifest file that only
+  gets generated by `collectstatic` — locally this was masked because the
+  manifest already existed on disk from an earlier Docker build.
