@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  ai-service-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai_service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Run tests
+        run: uv run pytest tests/ -v
+
+  django-app-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: django_app
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      GCP_PROJECT_ID: test-project
+      DJANGO_SA_EMAIL: test@test.iam.gserviceaccount.com
+      AI_SA_EMAIL: test@test.iam.gserviceaccount.com
+      DJANGO_SECRET_KEY: ci-test-secret-key
+      DATABASE_URL: sqlite:///ci_test.sqlite3
+      DJANGO_CALLBACK_SECRET: test
+      GCS_BUCKET: test-bucket
+      BQ_DATASET: contract_intel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Run tests
+        run: uv run python manage.py test analytics documents -v 2

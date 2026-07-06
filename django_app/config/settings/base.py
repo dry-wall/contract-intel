@@ -119,3 +119,8 @@ MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024))
 BQ_DATASET = os.environ.get("BQ_DATASET", "contract_intel")
 # --- Push webhook auth (Phase 10) -------------------------------------------
 AI_SA_EMAIL = os.environ.get("AI_SA_EMAIL", "")
+# Phase 11: the webhook's own audience, for strict OIDC token validation.
+# Deferred in Phase 10 because the URL wasn't known until after first
+# deploy — now that it's stable, set DJANGO_PUSH_AUDIENCE to the real
+# Cloud Run URL (e.g. https://django-web-xxxxx.a.run.app).
+DJANGO_PUSH_AUDIENCE = os.environ.get("DJANGO_PUSH_AUDIENCE", "")

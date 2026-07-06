@@ -45,23 +45,25 @@ def test_success_path_publishes_started_then_complete(
 
 
 @patch("app.processing.publish_processing_failed")
+@patch("app.processing.ocr_pdf")
 @patch("app.processing.download_pdf")
 @patch("app.processing.extract_pages")
-def test_scanned_pdf_publishes_failed_and_is_not_marked_processed(
-    mock_extract, mock_download, mock_failed
-):
+def test_scanned_pdf_falls_back_to_ocr(mock_extract, mock_download, mock_ocr, mock_failed):
+    """
+    Phase 11: scanned PDFs now attempt OCR instead of dead-ending. This
+    test replaces the old Phase 6 version, which asserted the pre-OCR
+    dead-end status ("needs_ocr") that no longer exists — see
+    test_processing_ocr.py for the full OCR success/failure paths.
+    """
     mock_extract.return_value = [{"page_number": i, "text": ""} for i in range(1, 6)]
     mock_download.return_value = b"fake"
+    mock_ocr.side_effect = RuntimeError("OCR not available in this quick check")
 
     result = handle_upload_event(_payload(job_id=2))
 
-    assert result["status"] == "needs_ocr"
-    mock_failed.assert_called_once()
-    assert mock_failed.call_args[0][0] == 2
-    assert "scanned" in mock_failed.call_args[0][1].lower()
-    # Critical: NOT marked as processed, so a future redelivery isn't silently skipped.
+    assert result["status"] == "ocr_failed"
+    mock_ocr.assert_called_once()
     assert 2 not in _processed_job_ids
-
 
 @patch("app.processing.stream_clauses")
 @patch("app.processing.publish_processed_result")

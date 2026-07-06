@@ -80,3 +80,31 @@ class ProcessedEventWebhookTests(TestCase):
     def test_get_is_not_allowed(self):
         response = self.client.get(reverse("documents:processed_webhook"))
         self.assertEqual(response.status_code, 405)
+
+    @patch("documents.views.apply_processed_event")
+    @patch("documents.views.id_token.verify_oauth2_token")
+    def test_audience_is_passed_when_configured(self, mock_verify, mock_apply):
+        mock_verify.return_value = {"email": "ai-worker-sa@test-project.iam.gserviceaccount.com"}
+        with self.settings(DJANGO_PUSH_AUDIENCE="https://django-web-example.a.run.app"):
+            self.client.post(
+                reverse("documents:processed_webhook"),
+                data=_push_body({"job_id": 1, "status": "COMPLETE"}),
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer validtoken",
+            )
+        call_kwargs = mock_verify.call_args.kwargs
+        self.assertEqual(call_kwargs.get("audience"), "https://django-web-example.a.run.app")
+
+    @patch("documents.views.apply_processed_event")
+    @patch("documents.views.id_token.verify_oauth2_token")
+    def test_audience_is_none_when_unconfigured(self, mock_verify, mock_apply):
+        mock_verify.return_value = {"email": "ai-worker-sa@test-project.iam.gserviceaccount.com"}
+        with self.settings(DJANGO_PUSH_AUDIENCE=""):
+            self.client.post(
+                reverse("documents:processed_webhook"),
+                data=_push_body({"job_id": 1, "status": "COMPLETE"}),
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer validtoken",
+            )
+        call_kwargs = mock_verify.call_args.kwargs
+        self.assertIsNone(call_kwargs.get("audience"))

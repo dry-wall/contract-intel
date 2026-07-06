@@ -19,6 +19,8 @@ dependencies = [
     "google-cloud-pubsub>=2.25",
     "google-cloud-bigquery>=3.25",
     "requests>=2.32",
+    "google-cloud-vision>=3.7",
+    "pymupdf>=1.24",
 ]
 
 [dependency-groups]

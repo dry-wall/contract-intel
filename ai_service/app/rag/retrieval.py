@@ -8,31 +8,58 @@ of the same collection instead.
 
 Same collection, same embedding model, split only by the source_type
 metadata filter — one corpus serving two different purposes.
+
+Phase 11: removed the Phase 10 diagnostic subprocess probe (it was purely
+for isolating a bug that turned out to be Cloud Run CPU throttling, not the
+model load itself — keeping it would add a full subprocess spawn to every
+cold start for no benefit now that the real fix, --no-cpu-throttling, is in
+place). Added real OIDC token refresh: the previous version fetched one
+token at client construction and never renewed it, so any ai-service
+instance staying warm longer than the token's ~1hr lifetime would start
+getting 403s from chroma-server again.
 """
-from google.auth.transport.requests import Request as GoogleAuthRequest
-from google.oauth2.id_token import fetch_id_token
-import os
 import logging
+import os
+
 import chromadb
 from chromadb.utils import embedding_functions
-import concurrent.futures
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from google.oauth2.id_token import fetch_id_token
+
 from app import config
-import multiprocessing
+
+logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "clauses"
+# Refresh the OIDC token if it's older than this, regardless of whether a
+# call has actually failed yet — cheaper and simpler than reacting to a 403
+# after the fact, and tokens are cheap to fetch (a local, fast call).
+TOKEN_MAX_AGE_SECONDS = 45 * 60  # 45 min, safely under the ~1hr token lifetime
 
 _client: chromadb.ClientAPI | None = None
 _collection = None
+_token_fetched_at: float = 0.0
+_chroma_host: str | None = None
+_chroma_port: int | None = None
 
 
 def _get_client() -> chromadb.ClientAPI:
-    global _client
-    if _client is not None:
+    """
+    Rebuilds the client if the cached OIDC token is stale, so a long-lived
+    warm instance keeps working instead of silently 403ing after ~1 hour.
+    """
+    import time
+
+    global _client, _token_fetched_at, _chroma_host, _chroma_port
+
+    chroma_host_env = os.environ.get("CHROMA_HOST", "")
+    token_is_stale = (time.time() - _token_fetched_at) > TOKEN_MAX_AGE_SECONDS
+
+    if _client is not None and not (chroma_host_env and token_is_stale):
         return _client
 
-    chroma_host = os.environ.get("CHROMA_HOST", "")
-    if chroma_host:
-        host, _, port = chroma_host.partition(":")
+    if chroma_host_env:
+        host, _, port = chroma_host_env.partition(":")
         # chroma-server (Phase 10) is --no-allow-unauthenticated — a plain
         # HttpClient never attaches any identity, so every request would
         # get a 403 from Cloud Run's IAM layer before ChromaDB's own code
@@ -47,38 +74,23 @@ def _get_client() -> chromadb.ClientAPI:
             ssl=True,
             headers={"Authorization": f"Bearer {token}"},
         )
+        _token_fetched_at = time.time()
+        logger.info("chroma client (re)built with fresh OIDC token")
     else:
         chroma_path = os.environ.get("CHROMA_PATH", "./.chroma")
         path = chroma_path if os.path.isabs(chroma_path) else str(config.REPO_ROOT / chroma_path)
         _client = chromadb.PersistentClient(path=path)
+
     return _client
 
-def _load_embed_fn_in_subprocess(model_name, result_queue):
-    from chromadb.utils import embedding_functions
-    fn = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=model_name)
-    result_queue.put("done")
 
 def _get_collection():
     global _collection
-    if _collection is not None:
-        return _collection
-
     embedding_model = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
-    logging.getLogger(__name__).info("loading embedding model %s (subprocess probe)", embedding_model)
-
-    ctx = multiprocessing.get_context("spawn")
-    q = ctx.Queue()
-    p = ctx.Process(target=_load_embed_fn_in_subprocess, args=(embedding_model, q))
-    p.start()
-    p.join(timeout=30)
-    if p.is_alive():
-        p.terminate()
-        raise RuntimeError("Embedding model load hung even in a fresh subprocess — not a threading/event-loop issue")
-    logging.getLogger(__name__).info("subprocess probe: model loads fine standalone, exit_code=%s", p.exitcode)
-
-    # Now build it for real, in-process, same as before
     embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=embedding_model)
-    logging.getLogger(__name__).info("embedding model loaded (in-process)")
+    # Re-fetch the client every call (cheap: _get_client() only rebuilds
+    # when the token is actually stale) rather than caching the collection
+    # object itself, so a token refresh mid-run is picked up transparently.
     _collection = _get_client().get_or_create_collection(
         name=COLLECTION_NAME, embedding_function=embed_fn
     )

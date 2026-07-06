@@ -211,11 +211,11 @@ def processed_event_webhook(request):
 
     token = auth_header.split(" ", 1)[1]
     try:
-        # audience=None skips strict audience validation — acceptable for
-        # now since the webhook's own URL isn't known until after first
-        # deploy (see Phase 10 guide's chicken-and-egg note). Tightening
-        # this to the real audience is a Phase 11 hardening item.
-        claims = id_token.verify_oauth2_token(token, google_requests.Request())
+        # Verifies both that Google issued this token AND that it was
+        # minted specifically for this webhook's URL (DJANGO_PUSH_AUDIENCE),
+        # not just any valid token from the expected service account.
+        audience = settings.DJANGO_PUSH_AUDIENCE or None  # None = skip strict check if unset
+        claims = id_token.verify_oauth2_token(token, google_requests.Request(), audience=audience)
     except ValueError:
         logger.exception("Invalid Pub/Sub push OIDC token")
         return HttpResponseForbidden("Invalid token")

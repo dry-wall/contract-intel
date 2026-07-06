@@ -24,7 +24,7 @@ same job_id expecting it to actually be retried). The real fix for
 with a max-delivery-attempts cap -- tracked for Phase 11, not solved here.
 """
 import logging
-
+from app.ocr import ocr_pdf
 from app.agent.graph import run_agent
 from app.gcs import download_pdf
 from app.pdf_extract import extract_pages
@@ -64,22 +64,29 @@ def handle_upload_event(payload: ProcessRequest) -> dict:
             payload.job_id, len(pages), total_chars,
         )
 
+
         if pages and (total_chars / len(pages)) < MIN_CHARS_PER_PAGE:
             logger.warning(
-                "job_id=%s has only %.1f chars/page -- likely scanned/image PDF. "
-                "Skipping agent call (OCR fallback not yet implemented; tracked in BACKLOG.md).",
+                "job_id=%s has only %.1f chars/page — likely scanned/image PDF. "
+                "Falling back to OCR (Phase 11).",
                 payload.job_id, total_chars / len(pages),
             )
-            publish_processing_failed(
-                payload.job_id,
-                "Document appears to be a scanned/image PDF. OCR support is not yet available.",
-            )
-            # NOT added to _processed_job_ids: a scanned PDF is a genuine
-            # dead end today, but if OCR support ships later and this event
-            # gets redelivered/requeued, it should be retried, not silently
-            # skipped as "already handled."
-            return {"job_id": payload.job_id, "status": "needs_ocr"}
-
+            try:
+                pages = ocr_pdf(pdf_bytes)
+                total_chars = sum(len(p["text"]) for p in pages)
+                logger.info(
+                    "job_id=%s OCR fallback extracted %d pages, %d total characters",
+                    payload.job_id, len(pages), total_chars,
+                )
+            except Exception as ocr_exc:
+                logger.exception("job_id=%s OCR fallback failed", payload.job_id)
+                publish_processing_failed(
+                    payload.job_id, f"OCR fallback failed: {ocr_exc}"
+                )
+                # NOT added to _processed_job_ids — a transient Vision API
+                # error should still be retryable, same reasoning as every
+                # other failure path in this function.
+                return {"job_id": payload.job_id, "status": "ocr_failed"}
         # Heartbeat: tell Django we've started real work, before the
         # potentially-slow agent call. Keeps the status page from looking
         # stuck at PUBLISHED for the whole duration of the LLM calls.
