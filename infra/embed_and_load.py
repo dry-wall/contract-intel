@@ -38,11 +38,7 @@ BATCH_SIZE = 100  # keeps memory/CPU bounded; embedding 6000+ clauses in one
 def get_chroma_client() -> chromadb.ClientAPI:
     if CHROMA_HOST:
         host, _, port = CHROMA_HOST.partition(":")
-        return chromadb.HttpClient(host=host, port=int(port) if port else 8000)
-    # REPO_ROOT-relative so it lands in the same place regardless of cwd.
-    path = CHROMA_PATH if os.path.isabs(CHROMA_PATH) else str(REPO_ROOT / CHROMA_PATH)
-    return chromadb.PersistentClient(path=path)
-
+        return chromadb.HttpClient(host=host, port=int(port) if port else 8000, ssl=True)
 
 def main():
     if not CLAUSES_JSON.exists():

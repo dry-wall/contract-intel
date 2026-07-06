@@ -22,8 +22,9 @@ RUN pip install --no-cache-dir uv
 # rarely change, application code changes often; ordering the COPY this way
 # means most rebuilds only re-run the fast `COPY . .` step, not `uv sync`.
 COPY pyproject.toml uv.lock ./
+ENV UV_HTTP_TIMEOUT=120
 RUN uv sync --frozen --no-dev
-
+RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')"
 COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH"
@@ -32,4 +33,4 @@ EXPOSE 8000
 
 # Production entrypoint (Phase 10 / Cloud Run push mode). Local dev
 # overrides this to run the pull worker instead — see docker-compose.yml.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}

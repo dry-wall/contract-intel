@@ -26,7 +26,7 @@ def _publish(event: ProcessedEvent) -> str:
     topic_path = get_publisher().topic_path(config.GCP_PROJECT_ID, config.PUBSUB_PROCESSED_TOPIC)
     payload = event.model_dump()
     future = get_publisher().publish(topic_path, json.dumps(payload).encode("utf-8"))
-    return future.result(timeout=10)
+    return future.result(timeout=30)
 
 
 def publish_processing_started(job_id: int) -> str:

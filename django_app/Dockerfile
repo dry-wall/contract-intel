@@ -29,4 +29,4 @@ EXPOSE 8000
 
 # Production entrypoint (Phase 10 / Cloud Run). Local dev overrides this —
 # see docker-compose.yml.
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]
+CMD python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8080} --workers 2

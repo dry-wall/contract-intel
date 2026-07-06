@@ -4,6 +4,8 @@ the Django side, but this service only ever READS (google-cloud-storage
 client here never needs write access — the ai-worker-sa service account is
 scoped to storage.objectViewer only, by design).
 """
+import concurrent.futures
+
 from google.cloud import storage
 
 from app import config
@@ -15,10 +17,8 @@ def get_storage_client() -> storage.Client:
     global _client
     if _client is not None:
         return _client
-
     if config.GCS_EMULATOR_HOST:
         from google.auth.credentials import AnonymousCredentials
-
         _client = storage.Client(
             project=config.GCP_PROJECT_ID,
             credentials=AnonymousCredentials(),
@@ -34,4 +34,7 @@ def download_pdf(gcs_path: str) -> bytes:
     exactly what Document.gcs_path stores on the Django side — no gs:// prefix."""
     bucket = get_storage_client().bucket(config.GCS_BUCKET)
     blob = bucket.blob(gcs_path)
-    return blob.download_as_bytes()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(blob.download_as_bytes)
+        return future.result(timeout=30)  # fail loudly instead of hanging silently

@@ -33,6 +33,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -77,6 +79,11 @@ DATABASES = {
     )
 }
 
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -110,3 +117,5 @@ PUBSUB_PROCESSED_PULL_SUBSCRIPTION = os.environ.get(
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25MB default
 # --- BigQuery (Phase 7) ------------------------------------------------------
 BQ_DATASET = os.environ.get("BQ_DATASET", "contract_intel")
+# --- Push webhook auth (Phase 10) -------------------------------------------
+AI_SA_EMAIL = os.environ.get("AI_SA_EMAIL", "")

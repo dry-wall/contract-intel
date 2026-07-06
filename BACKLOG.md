@@ -128,3 +128,63 @@
   system holds any data that isn't trivially re-derivable from the seed
   scripts.
 - **Status:** open, tracked for Phase 11 hardening.
+
+## Cloud Run CPU throttling caused silent hangs in background processing (Phase 10)
+- **Symptom:** in production, every upload correctly returned `200 OK` from
+  `ai-service`'s `/process` endpoint, but the actual background work
+  (Gemini calls, embedding model loading, Chroma queries) would then hang
+  indefinitely with zero errors, zero timeouts firing, and normal-looking
+  memory usage (~40% peak, confirmed via Cloud Monitoring). Jobs got stuck
+  at PROCESSING forever.
+- **Root cause:** Cloud Run's default CPU allocation is request-scoped —
+  CPU is only guaranteed to be available while actively handling an HTTP
+  request. Since `/process` deliberately returns its response immediately
+  and does the real work afterward via FastAPI `BackgroundTasks` (Phase 3's
+  design, so Pub/Sub doesn't see a slow response and retry), the container
+  could be throttled to near-zero CPU the moment the response was sent —
+  starving the background work indefinitely, with no crash or error to
+  surface, since nothing was actually broken, just never scheduled to run.
+- **Why it was hard to find:** every symptom (silent hang, no traceback,
+  intermittent-looking behavior across different runs) pointed toward the
+  code itself — auth, SSL, tokenizer threading, resource exhaustion — and
+  several real, worthwhile hardening fixes were made chasing those leads
+  (see below) before the actual cause was isolated. A standalone Cloud Run
+  **Job** running the identical embedding-load code succeeded in 1 second,
+  which was the key piece of evidence: Jobs aren't subject to request-scoped
+  CPU throttling, so an environment that behaves differently between Jobs
+  and Services pointed straight at Cloud Run's CPU allocation model rather
+  than application code.
+- **Fix:** `gcloud run services update ai-service --no-cpu-throttling` —
+  CPU is now allocated for the container's full lifetime, not just during
+  active requests. This is the standard, documented setting for exactly
+  this background-processing pattern.
+- **Also changed along the way, worth keeping regardless:**
+  - `pubsub_publish.py`: publish timeout raised (10s -> 30s) — real fix,
+    `ai-worker-sa` was also found to be missing `roles/pubsub.publisher` on
+    both topics entirely (granted during this session).
+  - `retrieval.py`: `chromadb.HttpClient` now uses `ssl=True` and attaches
+    a real OIDC bearer token — necessary regardless of the CPU-throttling
+    bug, since `chroma-server` is genuinely `--no-allow-unauthenticated`.
+    Known limitation: the token is fetched once per client instance and
+    not refreshed — will start failing again after ~1 hour on a
+    long-lived warm instance. Tracked as its own follow-up below.
+  - `gcs.py`: `download_pdf` now wrapped with an explicit 30s timeout
+    instead of no timeout at all — good defensive practice independent of
+    this bug.
+- **Status:** root cause fixed and confirmed working end-to-end in
+  production. Follow-ups below are not yet done.
+
+## Follow-ups from the CPU-throttling investigation (Phase 11)
+- **`--concurrency=1` is overly conservative.** Set during debugging to
+  rule out multi-request GIL contention on one instance; the real bug was
+  CPU throttling, not concurrency. Revisit and raise back toward a normal
+  value (Cloud Run's default is 80) now that `--no-cpu-throttling` is set,
+  to avoid needlessly limiting throughput.
+- **Chroma OIDC token refresh.** `retrieval.py`'s `_get_client()` fetches
+  one identity token at client construction and never refreshes it. A
+  warm `ai-service` instance surviving longer than the token's ~1 hour
+  lifetime will start getting 403s from `chroma-server` again. Needs a
+  refresh-on-401/403 retry, or re-fetching the token periodically.
+- **`processed_event_webhook`'s OIDC audience check is still unset**
+  (logged as its own item above) — same category of unfinished auth
+  hardening, worth doing together.

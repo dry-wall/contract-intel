@@ -12,7 +12,8 @@ dependencies = [
     "google-cloud-storage>=2.18",
     "google-cloud-pubsub>=2.25",
     "google-cloud-bigquery>=3.25",
+    "whitenoise>=6.7",
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.6", "pytest>=8.3", "pytest-django>=4.9"]
+dev = ["ruff>=0.6", "pytest>=8.3", "pytest-django>=4.9",]

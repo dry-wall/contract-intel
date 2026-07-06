@@ -12,6 +12,15 @@ job_results_page: renders clauses/risk/explanations plus the Phase 7
     round trip to the analytics app — this view calls its query functions
     directly, since they're already both server-side Python).
 """
+import base64
+
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+
+from .processed_events import apply_processed_event
 import json
 import logging
 
@@ -174,3 +183,57 @@ def job_results_page(request, job_id):
             "has_scored_clauses": has_scored_clauses,
         },
     )
+@csrf_exempt
+@require_POST
+def processed_event_webhook(request):
+    """
+    Production push endpoint for document-processed events (Phase 10).
+    Replaces Phase 6's pull-based consume_processed_events management
+    command in production — Cloud Run doesn't run long-lived background
+    processes well (a pull worker would need to be its own always-on
+    service, defeating Cloud Run's scale-to-zero economics), so prod uses
+    Pub/Sub PUSH delivery hitting this view instead. Local dev still uses
+    the Phase 6 pull worker, since it sidesteps exposing your dev machine
+    to the emulator's push mechanism — same "pull for dev, push for prod"
+    principle used throughout this build (Phase 3's ai_service, Phase 6's
+    Django consumer).
+
+    Security: verifies the Pub/Sub push request's OIDC identity token to
+    confirm the request genuinely came from Pub/Sub acting as the expected
+    service account — not an arbitrary POST from the internet hitting a
+    guessed URL. csrf_exempt is required because this is a server-to-server
+    webhook, not a browser form submission; the OIDC check is what actually
+    authenticates the caller instead.
+    """
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    if not auth_header.startswith("Bearer "):
+        return HttpResponseForbidden("Missing bearer token")
+
+    token = auth_header.split(" ", 1)[1]
+    try:
+        # audience=None skips strict audience validation — acceptable for
+        # now since the webhook's own URL isn't known until after first
+        # deploy (see Phase 10 guide's chicken-and-egg note). Tightening
+        # this to the real audience is a Phase 11 hardening item.
+        claims = id_token.verify_oauth2_token(token, google_requests.Request())
+    except ValueError:
+        logger.exception("Invalid Pub/Sub push OIDC token")
+        return HttpResponseForbidden("Invalid token")
+
+    if claims.get("email") != settings.AI_SA_EMAIL:
+        logger.error("Push token from unexpected service account: %s", claims.get("email"))
+        return HttpResponseForbidden("Unexpected caller")
+
+    try:
+        envelope = json.loads(request.body)
+        message = envelope["message"]
+        payload = json.loads(base64.b64decode(message["data"]))
+    except (KeyError, ValueError) as exc:
+        logger.exception("Malformed Pub/Sub push envelope")
+        return HttpResponseBadRequest(f"Bad envelope: {exc}")
+
+    apply_processed_event(payload)
+
+    # 204, not 200: Pub/Sub only cares about the 2xx/non-2xx distinction for
+    # ack/redeliver — no response body is needed or expected.
+    return HttpResponse(status=204)
