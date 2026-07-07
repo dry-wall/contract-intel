@@ -18,7 +18,7 @@ Different document types get different treatment: an NDA skips risk-scoring for 
 
 ```
                     ┌──────────────────────┐
-   Browser  ───────▶│   Django (product)   │
+   Browser  ──────▶│   Django (product)   │
                     │  - auth, dashboard   │
                     │  - upload/status/    │
                     │    results pages     │
